@@ -4,7 +4,7 @@ import schedule
 
 from icalendar import Calendar
 
-from telegram import Update
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import Updater, MessageHandler, Filters, CommandHandler, CallbackContext, ConversationHandler
 
 import threading
@@ -81,10 +81,11 @@ class UoMCheckinBot:
     def __setup(self, update: Update, context: CallbackContext):
         setup_msg = "First, we need your UoM timetable's ical subscription address, which can be found in your https://timetables.manchester.ac.uk/ (*SUBSCRIBE->More->Manual subscription->COPY*), then paste the link here."
         setup_deny_msg = "This bot is currently not supported to be used in a group."
+        keyboard_markup = ReplyKeyboardMarkup([['/cancel']], one_time_keyboard=True)
         if (update.effective_chat.id < 0):
-            update.message.reply_text(text=setup_deny_msg)
+            update.message.reply_text(setup_deny_msg)
             return ConversationHandler.END
-        msg = update.message.reply_text(text=setup_msg)
+        msg = update.message.reply_markdown(setup_msg, reply_markup=keyboard_markup)
         if not self.hint_image:
             img = open(HINT_IMAGE_PATH, "rb")
             img_msg = msg.reply_photo(photo=img)
@@ -116,12 +117,12 @@ class UoMCheckinBot:
         return False
 
     def __setup_2(self, update: Update, context: CallbackContext):
-        VALIDATING_MSG = "Validating your ical subscription url, please wait for a few seconds..."
-        SUCCESS_MSG = "Exellent, everythings' done. You will be notified to go check-in by this bot when every session is about to start."
+        VALIDATING_MSG = "Verifying your ical subscription URL, please wait for a few seconds..."
+        SUCCESS_MSG = "Exellent, everythings' done! You will be notified to go check-in by this bot when every session is about to start."
         VERIFY_FAILED_MSG = "Sorry, This link does not seem like a UoM timetable link. there might be internet issues, or you provided a wrong link. If you're sure everything's done right, it could be my problem, you can commit an issue on [GitHub](https://github.com/GrayNekoBean/uom_checkin_alarm_bot) or contact @GrayNekoBean for reporting the bug."
         DB_FAILED_MSG = "Sorry, I think you have already done setup here, or there might be a server side issue. If you think this is a bug, please commit an issue on [GitHub](https://github.com/GrayNekoBean/uom_checkin_alarm_bot) or contact @GrayNekoBean for reporting the bug."
         link = update.message.text
-        update.message.reply_text(VALIDATING_MSG)
+        update.message.reply_text(VALIDATING_MSG, reply_markup=ReplyKeyboardRemove())
         verified_ical = self.__verify_subscription(link)
         if verified_ical:
             user = User(context.chat_data['id'], link, UserConfig())
@@ -130,7 +131,7 @@ class UoMCheckinBot:
             if self.notify_dispatcher.add_user(user):
                 update.message.reply_text(SUCCESS_MSG)
             else:
-                update.message.reply_text(DB_FAILED_MSG)
+                update.message.reply_markdown(DB_FAILED_MSG)
         else:
             update.message.reply_markdown(VERIFY_FAILED_MSG)
         return ConversationHandler.END
@@ -141,7 +142,7 @@ class UoMCheckinBot:
 
     def __cancel_setup(self, update: Update, context: CallbackContext):
         MSG = 'setup canceled.'
-        update.message.reply_text(MSG)
+        update.message.reply_text(MSG, reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
 
     def __setup_command_handlers(self):
