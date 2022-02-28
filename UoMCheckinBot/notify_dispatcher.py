@@ -23,10 +23,12 @@ class User:
         self.subscription = ical_address
         self.user_config = config
         self.calendar = None
+        self.ical_content = ''
         pass
 
     def release_calendar(self):
         self.calendar = None
+        self.ical_content = ''
 
 class Course:
     def __init__(self, course_code: str, course_name: str, course_type: str, start_time: int, end_time: int, user_id: int):
@@ -50,6 +52,9 @@ class NotifyDispatcher:
 
         self.users[user.tg_id] = user
         if user.calendar:
+            ical_file = open(f'./ical/{user.tg_id}.ics', 'w')
+            ical_file.write(user.ical_content)
+            ical_file.close()
             self.dispatchForUser(user.tg_id)
         conn = sqlite3.connect(self.db)
         if conn:

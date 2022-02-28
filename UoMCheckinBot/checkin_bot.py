@@ -112,7 +112,7 @@ class UoMCheckinBot:
                             if len(parts) == 2:
                                 infos[parts[0]] = parts[1]
                         if ('Event type' in infos) and ('Unit Code' in infos) and ('Unit Description' in infos):
-                            return ical
+                            return (ical, response.text)
         return False
 
     def __setup_2(self, update: Update, context: CallbackContext):
@@ -125,7 +125,8 @@ class UoMCheckinBot:
         verified_ical = self.__verify_subscription(link)
         if verified_ical:
             user = User(context.chat_data['id'], link, UserConfig())
-            user.calendar = verified_ical
+            user.calendar = verified_ical[0]
+            user.ical_content = verified_ical[1]
             if self.notify_dispatcher.add_user(user):
                 update.message.reply_text(SUCCESS_MSG)
             else:
