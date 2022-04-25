@@ -1,6 +1,7 @@
-import logging
-from time import sleep
+import coloredlogs, logging
+from time import sleep, gmtime
 import schedule
+import datetime
 
 from icalendar import Calendar
 
@@ -11,10 +12,16 @@ import threading
 
 from .notify_dispatcher import *
 
+coloredlogs.install()
 logging.basicConfig(
      format='%(asctime)s %(levelname)-8s %(message)s',
      level=logging.INFO,
      datefmt='%Y-%m-%d %H:%M:%S')
+
+logger = logging.getLogger('checkin-bot')
+fh = logging.FileHandler('logs/' + str(datetime.now().strftime('%d-%m-%Y-%H:%M:%S')) + '.log')
+fh.setLevel(logging.INFO)
+logger.addHandler(fh)
 
 token_file = open('.TOKEN', 'r')
 TOKEN = token_file.read()
@@ -30,7 +37,7 @@ class UoMCheckinBot:
     def __init__(self) -> None:
         self.tg_updater = Updater(TOKEN)
         self.tg_dispatcher = self.tg_updater.dispatcher
-        self.notify_dispatcher = NotifyDispatcher('./db/bot-database.sqlite')
+        self.notify_dispatcher = NotifyDispatcher('./db/bot-database.db')
         self.hint_image = None
         self.__setup_command_handlers()
         pass
@@ -53,7 +60,7 @@ class UoMCheckinBot:
         if self.notify_dispatcher.load_all_users_calendars(fetch_local=fetch_local_icals):
             self.notify_dispatcher.dispatchAll()
         else:
-            logging.error("A database issue occured when trying to download ical files.")
+            logger.error("A database issue occured when trying to download ical files.")
 
     def update(self):
         if datetime.now().minute == 50:
@@ -67,7 +74,7 @@ class UoMCheckinBot:
         self.tg_dispatcher.bot.send_message(chat_id, msg, parse_mode=ParseMode.MARKDOWN)
 
     def __check_and_send_notifies(self):
-        current_hour = datetime.now().hour
+        current_hour = datetime.utcnow().hour
         courses = self.notify_dispatcher.query_course_by_time(current_hour)
         if courses:
             for course in courses:
@@ -91,7 +98,7 @@ class UoMCheckinBot:
             update.message.reply_text(setup_deny_msg)
             return ConversationHandler.END
         if self.notify_dispatcher.is_user_exists(update.effective_chat.id):
-            update.message.reply_text(update_msg, reply_markup=keyboard_markup)
+            msg = update.message.reply_text(update_msg, reply_markup=keyboard_markup)
             context.chat_data['updating'] = True
         else:
             msg = update.message.reply_markdown(setup_msg, reply_markup=keyboard_markup)
@@ -196,7 +203,7 @@ class UoMCheckinBot:
             update.message.reply_text(RESUME_FAILED_MSG)
 
     def __show_help(self, update: Update, context: CallbackContext):
-        HELP_MSG = "Welcome to use UoM check-in notify bot! if you find this bot helpful, could you please star the bot on [GitHub](https://github.com/GrayNekoBean/uom_checkin_alarm_bot)!\nThe help commands are shown below: \n/start : Initialize the bot.\n/setup : Setup your timetable subscription and activate the bot function for you.\n/stop : stop sending notifications, this will not erase your user data but just stop pushing notify.\n/resume : resume sending notifies from stop status.\n/cancel : cancel any in-progress action.\n/help : show this help message."
+        HELP_MSG = "Welcome to use UoM check-in notify bot! if you find this bot helpful, please give a star to this bot on [GitHub](https://github.com/GrayNekoBean/uom_checkin_alarm_bot)!\nThe help info for commands are shown below: \n/start : Initialize the bot.\n/setup : Setup your timetable subscription and activate the bot function for you.\n/stop : stop sending notifications, this will not erase your user data but just stop pushing notify.\n/resume : resume sending notifies from stop status.\n/cancel : cancel any in-progress action.\n/help : show this help message."
 
         update.message.reply_markdown(HELP_MSG)
         

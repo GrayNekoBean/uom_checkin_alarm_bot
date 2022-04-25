@@ -1,16 +1,17 @@
 from datetime import datetime
+from distutils.log import info
 import sqlite3
-from typing import Dict, List
 from icalendar import Calendar
 import requests
 import logging
 import os
+import logging
+
+logger = logging.getLogger('checkin-bot')
 
 class UserConfig:
     def __init__(self, **kwargs) -> None:
-
         self.stop = False
-
         for key in kwargs:
             try:
                 setattr(self, key, kwargs[key])
@@ -84,7 +85,7 @@ class NotifyDispatcher:
                 conn.close()
                 return True
             else:
-                logging.error('Database connection failed when setting user config "stop" to true.')
+                logger.error('Database connection failed when setting user config "stop" to true.')
         return False
 
     def set_user_resume(self, tg_id: int):
@@ -102,7 +103,7 @@ class NotifyDispatcher:
                     self.dispatchForUser(tg_id)
                 return True
             else:
-                logging.error('Database connection failed when setting user config "stop" to false.')
+                logger.error('Database connection failed when setting user config "stop" to false.')
         return False
 
     def update_user_subscription(self, tg_id: int, new_sub: str):
@@ -119,7 +120,7 @@ class NotifyDispatcher:
                 self.dispatchForUser(tg_id)
                 return True
             else:
-                logging.error('Database connection failed when updating user ical subscription.')
+                logger.error('Database connection failed when updating user ical subscription.')
         return False
 
     def load_user_calendar(self, user: User):
@@ -133,7 +134,7 @@ class NotifyDispatcher:
             user.calendar = cal
             return True
         else:
-            logging.warning('ical file download failed for: ' + user.subscription + ' , user chat id: '+ user.tg_id)
+            logger.warning('ical file download failed for: ' + user.subscription + ' , user chat id: '+ user.tg_id)
             return False
 
     # @params
@@ -174,12 +175,12 @@ class NotifyDispatcher:
                     cal = Calendar.from_ical(response.text)
                     icals[user_id] = cal
                 else:
-                    logging.warning('ical file download failed for: ' + user.subscription + ' , user chat id: '+ user_id)
+                    logger.warning('ical file download failed for: ' + user.subscription + ' , user chat id: '+ user_id)
                     has_failed = True
 
         if has_failed:
             self.load_all_users_calendars(fetch_local=True, force_use_local=True)
-            logging.warning('One or more ical download failed, please check their validation or internet issue. The ical data has not been updated and now using local data.')
+            logger.warning('One or more ical download failed, please check their validation or internet issue. The ical data has not been updated and now using local data.')
         else:
             for id in icals:
                 if self.users[id].config.stop:
@@ -224,7 +225,29 @@ class NotifyDispatcher:
                     parts = ln.split(':')
                     if len(parts) == 2:
                         infos[parts[0]] = parts[1].strip()
-                course = (infos['Unit Code'], infos['Unit Description'], infos['Event type'], start_time.hour, end_time.hour, tg_id)
+                
+                unit_code = 'UNKNOW'
+                unit_desc = 'Unknow'
+                event_type = 'Unknow type'
+                if 'Unit Code' in infos:
+                    unit_code = infos['Unit Code']
+                elif 'Code' in infos:
+                    unit_code = infos['Code']
+                else:
+                    logger.error('Cannot find "Unit Code" in calendar info. Please check if there is any change on calendar format.')
+
+                if 'Description' in infos:
+                    unit_desc = infos['Description']
+                elif 'Unit Description' in infos:
+                    unit_desc = infos['Unit Description']
+                else:
+                    logger.error('Cannot find "Description" in calendar info. Please check if there is any change on calendar format.')
+                
+                if 'Event type' in infos:
+                    event_type = infos['Event type']
+                else:
+                    logger.error('Cannot find "Event type" in calendar info. Please check if there is any change on calendar format.')
+                course = (unit_code, unit_desc, event_type, start_time.hour, end_time.hour, tg_id)
                 sessions.append(course)
         self.users[tg_id].release_calendar()
         return sessions
@@ -239,11 +262,19 @@ class NotifyDispatcher:
 
     def dispatchAll(self):
         sessions = []
+        n = 0
+        f = 0
         for user_id in self.users:
-            sessions.extend(self.__dispatch(user_id))
+            sess = self.__dispatch(user_id)
+            if len(sess) > 0:
+                sessions.extend(sess)
+                n += 1
+            else:
+                f += 1
         conn = sqlite3.connect(self.db)
         cur = conn.cursor()
         cur.execute("DELETE FROM Course")
         cur.executemany("INSERT INTO Course (course_code, course_name, course_type, start_time, end_time, user_id) VALUES (?, ?, ?, ?, ?, ?)", sessions)
         conn.commit()
         conn.close()
+        logger.info(f'Successfully dispatched today\'s timetable for {n} users with {f} user(s) failed to dispatch.')
