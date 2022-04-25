@@ -195,7 +195,7 @@ class NotifyDispatcher:
             return False
         cursor = conn.cursor()
         courses = []
-        if type(hour_time) == int and hour_time >= 8 and hour_time <= 21:
+        if type(hour_time) == int and hour_time >= 7 and hour_time <= 21:
             QUERY_COURSE_BY_TIME = "SELECT * from Course WHERE start_time = :hour"
             res = cursor.execute(QUERY_COURSE_BY_TIME, {'hour': hour_time + 1})
             for c_data in res.fetchall():
